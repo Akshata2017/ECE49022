@@ -13,10 +13,10 @@ display_scl_pin_number = 4
 display_sda_pin_number = 14
 
 # for voltage pin
-read_voltage_pin_number = 39
+read_voltage_pin_number = 32
 
 # for current pin
-read_current_pin_number = -1
+read_current_pin_number = 33
 
 # for relay
 relay_pin_number = 25
