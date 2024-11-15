@@ -142,7 +142,7 @@ def DisplayFile(voltage, current, power):
 
 # Function to read voltage from ADC pin
 def ReadVoltage():
-    adc_pin = ADC(Pin(39))  
+    adc_pin = ADC(Pin(32))  
     adc_value = adc_pin.read() 
     voltage = (adc_value - 3000) / 6000 * 100
     return voltage
