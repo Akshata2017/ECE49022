@@ -162,12 +162,12 @@ def main():
     sixty_seconds = 60_000
     main_timer.init(period=sixty_seconds, mode=Timer.PERIODIC, callback=main_callback)
 
-    while True:
-        addr = socket.getaddrinfo(ip_address, 80)[0][-1]
-        s = socket.socket()
-        s.bind(addr)
-        s.listen(5) 
+    addr = socket.getaddrinfo(ip_address, 80)[0][-1]
+    s = socket.socket()
+    s.bind(addr)
+    s.listen(5) 
 
+    while True:
         cl, addr = s.accept()
         request = cl.recv(1024)
 
