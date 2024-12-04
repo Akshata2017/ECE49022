@@ -17,7 +17,7 @@ collection_name = "devices"
 firestore_url = f"https://firestore.googleapis.com/v1/projects/{project_id}/databases/(default)/documents/{collection_name}/WcWydmQhgrcdwf0aKyIQ"
 
 # OAuth Access Token
-access_token = "ya29.a0AeDClZCTb_pd8LNKvvAQHGKxNbci9ofxK--ds0F8gJ4MCr1ApXjE3-oyVwVPizg69lISfjL-TL7oacwkCKKDxQJh_k8Nm2Hnx3eH1xUbTDfNCsjiq6A1-kqe3-bJr1E4PHAhu2uQijwuPH9aMzr3jmjzRF9NVbiLcTQd4ArwRQaCgYKAUMSARISFQHGX2Mic2zs0s9oPqTPDmI7w6eU_A0177"
+access_token = "FILL HERE"
 # Function to connect to Wi-Fi
 def connect_wifi():
     wlan = network.WLAN(network.STA_IF)
