@@ -1,0 +1,53 @@
+// This is code in BigQuery, NOT in Thonny. Just want it uploaded here so I don't accidentally lose it.
+
+WITH FlattenedData AS (
+  SELECT 
+    SAFE_CAST(voltage_items AS FLOAT64) AS voltage1,
+    SAFE_CAST(current_items AS FLOAT64) AS current1,
+    ROW_NUMBER() OVER () AS row_num
+  FROM 
+    `iostest-4ba71.firestore_export.devices_raw_latest`,
+    UNNEST(JSON_EXTRACT_ARRAY(data, '$.voltage1')) AS voltage_items WITH OFFSET AS v_offset,
+    UNNEST(JSON_EXTRACT_ARRAY(data, '$.current1')) AS current_items WITH OFFSET AS c_offset
+  WHERE 
+    JSON_EXTRACT_SCALAR(data, '$.device_name') = "Simulated Device" 
+    AND v_offset = c_offset 
+),
+FilteredData AS (
+  SELECT
+    voltage1,
+    current1,
+    voltage1 * current1 AS power,
+    row_num
+  FROM FlattenedData
+  WHERE row_num <= 18  
+),
+GroupedData AS (
+  SELECT
+    CEIL(row_num / 6) AS hour_group, 
+    AVG(voltage1) AS avg_voltage, 
+    AVG(current1) AS avg_current,  
+    AVG(power) AS avg_power    
+  FROM FilteredData
+  GROUP BY hour_group
+  ORDER BY hour_group
+),
+HourIntervals AS (
+  SELECT
+    hour_group,
+    TIMESTAMP_ADD(TIMESTAMP("2024-11-26 14:00:00"), INTERVAL CAST(hour_group - 1 AS INT64) HOUR) AS hour_interval,
+    avg_voltage,
+    avg_current,
+    avg_power
+  FROM GroupedData
+)
+SELECT 
+  hour_interval,
+  avg_voltage,
+  avg_current,
+  avg_power
+FROM HourIntervals
+ORDER BY hour_interval ASC;
+
+
+
