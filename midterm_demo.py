@@ -3,6 +3,7 @@ import time
 import ujson
 import network
 import urequests
+import math
 from machine import Pin, ADC
 from machine import I2C, Pin
 from lcd_api import LcdApi
@@ -15,12 +16,12 @@ password = '2k1129230'
 # Firestore REST API URL
 project_id = "iostest-4ba71" 
 collection_name = "devices"  
-firestore_url = f"https://firestore.googleapis.com/v1/projects/iostest-4ba71/databases/(default)/documents/devices/WcWydmQhgrcdwf0aKyIQ"
+firestore_url = f"https://firestore.googleapis.com/v1/projects/iostest-4ba71/databases/(default)/documents/devices/mirror_test"
 
 # OAuth Access Token
-access_token = "ya29.c.c0ASRK0GbK8tYJjSwjmBnslQ-yj1FboqDeBeqHz0YSimhEo7gtnkeysS0n-kj7aRzCFSLJR-_f40CuMbaXjum6Nho1OQr0LF3N-RmxtJntAFqSJaDpnp-e6JSdZzNbt2DTbjmuepteuo7zQtz43Wr5IViTiYkOn46qGmHVCjs8y_Ogt5-Js7k1SN90JDGrwoTJIpvUV_E9XBWejcdw232IFLLwYu3iNLvW86epj7ce4vqskQIFPKVi5PN9MM5VdYJipSn19mFIrQewzZU8oWR4f85LqCUlNo223iZ-1mtSGNTivJXMjLXMKWOsOpJFHeD32GtGFdKNzWUEnrJ_X_TandBHfwjCKKyvgIKDkdtGEqcH1CDdfnFF09NYDWrDlaNK91oIyQL399ClJX7mB4s986opo3u6cojfnuWM1w3p6ptp-9tuyqR2-RXifujjtrlygrRO54YU1FOR2WtMhc_QOO7vS6BMtORvp62Sfg574XIW5Ym9X6klo-l3FabuXnetcaRFZ4udUucbX7iru8u7nvfnVgX3u_2RbsVVkdQrUVjyixam9U-R35topWStpyoY0UnZahMa9f1_almYuo4htfk0mzXe22IcfWbz5knxu2Q4gziX2cFJZudmdhfjgV8QMuY0aco3j0awWZXsyMdR6QI8hjmI6m0FwBMwkebqRs9m-46izUM8jnz5oYm5f9BilnnnmW-O1RF5Ju1JS9SRwBwyBFigfyWoQOVk7UfU2t40-4_yhrO96gefigZ49VFFZdUmXSBcn6l9M200btwX8xtzF_bMfm6jncVbQUX666dt2yZ2F2dlYkWFSuQakudqyQZtQqSSl3Umppfm5dMRR4vUsa2a8qrkf2cx5oUe59vpwJkj23rtJqvevRZjfa1I9aSpnJiJxzRfmIaugZQf27FUMe5VoosBaV87rY9Bh97jr5UbobUF_XFnJWw35mBjf_iMXqOyOOZM1IZblumqzMlsQlXZrZIuaOU3knRBze9hhpQXkcMVnWe"
-# Throughput and Latency measurement variables
 data_points = 0
+access_token = "ya29.a0AeDClZB0msokLvcBQsBmh9eGmbLVDFQ5D0hk6Y9Tq1_NOQuAp0fb8_0fGs9DNfzKFEvaioWGpa7pgTJvj5ADDMCA1X8e1SeyF3pE18RCBXcFUDYIDhwvAz6eQBUwLCfa4upYxpZaCNGMUsPGrvHO-KAA17COmz8j4T2kKnJbCwaCgYKAeQSARISFQHGX2MiMOJGjbR2MuaI7kuWDNtDGQ0177"
+
 start_time = time.time()
 
 # Function to connect to Wi-Fi
@@ -30,9 +31,17 @@ def connect_wifi():
     if not wlan.isconnected():
         print('Connecting to Wi-Fi...')
         wlan.connect(ssid, password)
-        while not wlan.isconnected():
+        for i in range(10):  # Try for 10 seconds
+            if wlan.isconnected():
+                break
             time.sleep(1)
-    print('Connected to Wi-Fi:', wlan.ifconfig())
+            print(f"Attempt {i+1}: Still connecting...")
+    if wlan.isconnected():
+        print('Connected to Wi-Fi:', wlan.ifconfig())
+    else:
+        print('Failed to connect to Wi-Fi')
+        raise OSError("Wi-Fi Connection Failed")
+
 
 # Function to format time in EST
 def format_timestamp():
@@ -117,11 +126,14 @@ def append_voltage_current_power(voltage, current, power):
         response.close()
     except Exception as e:
         print(f"Failed to append voltage, current, and power: {e}")
+        
+        
 
 # Function to display data on the LCD
 def DisplayFile(voltage, current, power):
     # ESP32 I2C configuration
     i2c = I2C(0, scl=Pin(4), sda=Pin(14), freq=400000)
+    #i2c = I2C(0, freq=400000)
 
     # LCD address and screen dimensions
     I2C_ADDR = 0x27  # Common I2C address for 20x4 LCD
@@ -139,18 +151,63 @@ def DisplayFile(voltage, current, power):
     lcd.putstr(f"Current: {current:.2f} A")
     lcd.move_to(0, 2)  # Third line, first column
     lcd.putstr(f"Power: {power:.2f} W")
-
+    print(f"Refresh Rate: Once every 6 seconds.")
+    
 # Function to read voltage from ADC pin
 def ReadVoltage():
-    adc_pin = ADC(Pin(32))  
-    adc_value = adc_pin.read() 
-    voltage = (adc_value - 3000) / 6000 * 100
-    return voltage
+    # Configuration
+    adc_pin = 39  # GPIO pin connected to ZMPT101's OUT pin
+    vcc = 5.1  # Operating voltage of the sensor
+    adc_resolution = 4096  # 12-bit ADC on ESP32
+    calibration_factor = 100.0  # Adjust this value for accurate voltage measurements
 
-# Dummy current value generator
-def read_current():
-    current = 4 
+    # Initialize ADC
+    adc = ADC(Pin(adc_pin))
+    adc.atten(ADC.ATTN_11DB)  # Allow voltage range up to ~3.6V
+    adc.width(ADC.WIDTH_12BIT)  # Set ADC resolution to 12-bit
+
+    # Collect multiple samples to compute RMS
+    samples = 100
+    squared_sum = 0
+    for _ in range(samples):
+        raw_value = adc.read() # Convert the raw ADC value to voltage
+        voltage = (raw_value / adc_resolution) * vcc # Subtract offset (centered at VCC/2 for AC signal)
+        voltage -= vcc / 2 # Square the adjusted voltage
+        squared_sum += voltage ** 2
+        time.sleep(0.001)  # Small delay between samples
+
+    # Calculate the RMS voltage
+    mean_square = squared_sum / samples
+    rms_voltage = math.sqrt(mean_square)
+
+    # Convert to actual voltage using the calibration factor
+    actual_voltage = rms_voltage * calibration_factor
+    print(f"RMS: {rms_voltage:.4f}")
+    print(f"RAW_VOLTAGE: {raw_value:.4f}")
+    
+    return actual_voltage
+def ReadCurrent():
+    # Configuration 
+    adc_pin = 34
+    vcc = 5.1 #operating voltage of sensor
+    adc_resolution = 4096 #12-bit ADC on the ESP32
+    current_range = 20.0 #full scale current range in Amps
+    v_zero = vcc / 2 # sensor's zero-current voltage (assumes mid-scale at 0A)
+    
+    # Initialization 
+    adc = ADC(Pin(adc_pin))
+    adc.atten(ADC.ATTN_11DB)  # Set input attenuation to allow a larger voltage range (0-3.6V)
+    adc.width(ADC.WIDTH_12BIT)  # Set ADC resolution to 12-bit
+    
+    # Collect measurement
+    raw_value = adc.read()  # Read the raw analog value
+    voltage = (raw_value / adc_resolution) * vcc # Convert the raw ADC value to a voltage
+    
+    current = ((voltage - 1.494) / (vcc / 2)) * current_range # Convert the voltage to current
+    print(f"RAW_CURRENT: {raw_value:.4f}")
     return current
+
+
 
 # Main function
 def main():
@@ -158,13 +215,12 @@ def main():
 
     while True:
         voltage = ReadVoltage()  # Read sensor voltage
-        current = read_current()  # Read dummy current
+        current = ReadCurrent()  # Read sensor current
         power = voltage * current  # Calculate power
         DisplayFile(voltage, current, power)
         append_voltage_current_power(voltage, current, power)  # Upload data
         time.sleep(6)  # Wait 6 seconds between uploads
 
 main()
-# need to update the timestamp data (wrong timezone rn)
-# need to update the authentication (access token is not feasible long term)
-# google data studio portion has to be added
+
+
